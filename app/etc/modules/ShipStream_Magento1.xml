@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<config>
+    <modules>
+        <ShipStream_Magento1>
+            <codePool>community</codePool>
+            <active>true</active>
+            <depends>
+                <MWE_Plugin />
+            </depends>
+        </ShipStream_Magento1>
+    </modules>
+</config>

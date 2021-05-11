@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<plugin>
+    <ShipStream_Magento1>
+        <info>
+            <name>OpenMage/Magento 1</name>
+            <author>ShipStream, LLC</author>
+            <license>
+                <name>OSL 3.0</name>
+                <url>http://opensource.org/licenses/osl-3.0.php</url>
+            </license>
+            <description><![CDATA[
+                Sync orders, inventory and tracking information with OpenMage and Magento 1.
+                <p>
+                <b>Requires the <a href="https://github.com/ShipStream/openmage-sync" target="_blank">ShipStream Sync</a> extension!</b>
+                </p>
+            ]]></description>
+        </info>
+        <actions>
+            <sync_inventory>
+                <label>Sync Inventory</label>
+                <comment>Trigger inventory sync (pull from Magento).</comment>
+            </sync_inventory>
+            <sync_orders>
+                <label>Sync Orders</label>
+                <comment>Synchronize orders since the configured "Sync Orders Since" date.</comment>
+            </sync_orders>
+            <register_fulfillment_service>
+                <label>Register Fulfillment Service</label>
+                <comment>Registers a "Fulfillment" service URL.</comment>
+                <unless>isFulfillmentServiceRegistered</unless>
+            </register_fulfillment_service>
+            <unregister_fulfillment_service>
+                <label>Unregister Fulfillment Service</label>
+                <comment>Unregister the "Fulfillment" service URL.</comment>
+                <if>isFulfillmentServiceRegistered</if>
+            </unregister_fulfillment_service>
+        </actions>
+        <routes>
+            <inventoryWithLock>inventoryWithLock</inventoryWithLock>
+            <unlockOrderImport>unlockOrderImport</unlockOrderImport>
+        </routes>
+        <config>
+            <api_url translate="label comment" module="plugin">
+                <label>OpenMage/Magento API Url</label>
+                <type>text</type>
+                <sort_order>5</sort_order>
+                <validate>required-entry</validate>
+                <comment><![CDATA[<strong>Example:</strong> https://storename.com/api/soap/]]></comment>
+            </api_url>
+            <api_login translate="label comment" module="plugin">
+                <label>SOAP/XML-RPC User Name</label>
+                <type>text</type>
+                <sort_order>6</sort_order>
+                <validate>required-entry</validate>
+            </api_login>
+            <api_password translate="label" module="plugin">
+                <label>SOAP/XML-RPC API Key</label>
+                <type>obscure</type>
+                <sort_order>7</sort_order>
+                <validate>required-entry</validate>
+            </api_password>
+            <auto_fulfill>
+                <label>Auto-Fulfill Orders</label>
+                <type>text</type>
+                <comment><![CDATA[
+                Specify a comma-separated list of order status codes for which orders should be automatically fulfilled.<br/>
+                Example: <i>Processing</i> or <i>Ready to Ship</i>
+                ]]></comment>
+                <sort_order>10</sort_order>
+            </auto_fulfill>
+            <sync_orders_since>
+                <label>Sync Orders Since</label>
+                <type>date</type>
+                <sort_order>20</sort_order>
+            </sync_orders_since>
+        </config>
+        <crontab>
+            <every_ten_minutes>
+                <sync_orders>cron_sync_orders</sync_orders>
+            </every_ten_minutes>
+        </crontab>
+    </ShipStream_Magento1>
+</plugin>

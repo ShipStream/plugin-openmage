@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<config>
+    <modules>
+        <ShipStream_Magento1>
+            <version>0.1</version>
+        </ShipStream_Magento1>
+    </modules>
+    <default>
+        <plugin>
+            <ShipStream_Magento1>
+                <events>
+                    <delivery>
+                        <committed>1</committed>
+                    </delivery>
+                    <inventory>
+                        <adjusted>1</adjusted>
+                    </inventory>
+                    <shipment>
+                        <packed>1</packed>
+                    </shipment>
+                </events>
+            </ShipStream_Magento1>
+        </plugin>
+    </default>
+    <phpunit>
+        <suite>
+            <modules>
+                <ShipStream_Magento1 />
+            </modules>
+        </suite>
+    </phpunit>
+</config>
