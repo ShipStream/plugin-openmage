@@ -31,10 +31,10 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     {
         $info = $this->_magentoApi('magento.info');
         $lines = [];
-        $lines[] = sprintf('Magento Edition: %s', $info['magento_edition']);
-        $lines[] = sprintf('Magento Version: %s', $info['magento_version']);
-        $lines[] = sprintf('OpenMage Version: %s', $info['openmage_version']);
-        $lines[] = sprintf('ShipStream Sync Version: %s', $info['shipstream_sync_version']);
+        $lines[] = sprintf('Magento Edition: %s', $info['magento_edition'] ?? 'undefined');
+        $lines[] = sprintf('Magento Version: %s', $info['magento_version'] ?? 'undefined');
+        $lines[] = sprintf('OpenMage Version: %s', $info['openmage_version'] ?? 'undefined');
+        $lines[] = sprintf('ShipStream Sync Version: %s', $info['shipstream_sync_version'] ?? 'undefined');
         return $lines;
     }
     
