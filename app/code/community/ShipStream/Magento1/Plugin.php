@@ -237,11 +237,17 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
 
                 // Update Magento order status and add comment
                 $this->_magentoApi('order.addComment', [$magentoOrder['increment_id'], 'submitted', $message]);
-            } catch (Plugin_Exception $e) {
+            } catch (Throwable $e) {
+                $message = sprintf('Order could not be submitted due to a script error: %s', $e->getMessage());
+                $this->log($message);
                 try {
-                    $message = sprintf('Order could not be submitted due to a script error: %s', $e->getMessage());
                     $this->_magentoApi('order.addComment', [$magentoOrder['increment_id'], 'failed_to_submit', $message]);
-                } catch (Exception $ex) {}
+                    $message = sprintf('Status of order # %s was changed to "failed_to_submit" in merchant site', $magentoOrder['increment_id']);
+                    $this->log($message);
+                } catch (Throwable $t) {
+                    $message = sprintf('Order status could not be changed in merchant site due to a script error: %s', $e->getMessage());
+                    $this->log($message);
+                }
             }
         } finally {
             $this->_unlockOrderImport();
