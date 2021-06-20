@@ -39,3 +39,7 @@ plugin configuration.
 </config>
 ```
 
+**Notes**
+
+1. `<auto_fulfill>` The order status for filtering orders which are ready for fulfillment; default value: `ready_to_ship`.
+1. `<sync_orders_since>` The order last update date which are ready for syncing; valid format: `YYYY-MM-DD`.
