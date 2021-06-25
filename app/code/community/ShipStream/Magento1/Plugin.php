@@ -12,6 +12,8 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     const STATE_ORDER_LAST_SYNC_AT = 'order_last_sync_at';
     const STATE_LOCK_ORDER_PULL = 'lock_order_pull';
 
+    const SHIPPING_METHOD_PATTERN = '#^([\w-]+)\s*:\s*(title|code|source)\s*(=~|!=|=)\s*(.+)#';
+
     /** @var ShipStream_Magento1_Client */
     protected $_client = NULL;
 
@@ -29,7 +31,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
      */
     public function connectionDiagnostics()
     {
-        $info = $this->_magentoApi('magento.info');
+        $info = $this->_magentoApi('shipstream.info');
         $lines = [];
         $lines[] = sprintf('Magento Edition: %s', $info['magento_edition'] ?? 'undefined');
         $lines[] = sprintf('Magento Version: %s', $info['magento_version'] ?? 'undefined');
@@ -124,8 +126,10 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         // Check if order exists locally and if not, create new local order
         $result = $this->call('order.search', [['order_ref' => $orderIncrementId],[], []]);
         if ($result['totalCount'] > 0) {
+            // Local order exists, update Magento order status to 'submitted'.
+            $message = sprintf('ShipStream Order # %s was created at %s', $result['results'][0]['unique_id'], $result['results'][0]['created_at']);
+            $this->_addComment($orderIncrementId, 'submitted', $message);
             return; // Ignore already existing orders
-            // TODO - update status to submitted if order exists but Magento status is not submitted in case addComment failed
         }
 
         // Get full client order data
@@ -154,7 +158,13 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         // Prepare additional order data
         $additionalData = [
             'order_ref' => $magentoOrder['increment_id'],
-            'shipping_method' => $magentoOrder['shipping_method'],
+            'shipping_method' => $this->_getShippingMethod(
+                [
+                    'shipping_lines' => [
+                        ['code' => $magentoOrder['shipping_method']]
+                    ]
+                ]
+            ),
             'source' => 'magento:'.$magentoOrder['increment_id'],
         ];
 
@@ -218,12 +228,10 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                     return;
                 }
             }
-        } catch (Plugin_Exception $e) {
-            try {
-                $message = sprintf('Order could not be submitted due to a script error: %s', $e->getMessage());
-                $this->_magentoApi('order.addComment', [$magentoOrder['increment_id'], 'failed_to_submit', $message]);
-                $this->log($errorPrefix.$message, self::ERR);
-            } catch (Exception $ex) {}
+        } catch (Throwable $e) {
+            $message = sprintf('Order could not be submitted due to the following error: %s', $e->getMessage());
+            $this->_addComment($magentoOrder['increment_id'], 'failed_to_submit', $message);
+            $this->log($errorPrefix.$message, self::ERR);
             throw $e;
         }
 
@@ -231,23 +239,16 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $this->_lockOrderImport();
         try {
             try {
-                $this->call('order.create', [$newOrderData['store'], $newOrderData['items'], $newOrderData['address'], $newOrderData['options']]);
+                $result = $this->call('order.create', [$newOrderData['store'], $newOrderData['items'], $newOrderData['address'], $newOrderData['options']]);
                 $message = sprintf('Created ShipStream Order # %s', $result['unique_id']);
                 $this->log($message);
 
                 // Update Magento order status and add comment
-                $this->_magentoApi('order.addComment', [$magentoOrder['increment_id'], 'submitted', $message]);
+                $this->_addComment($magentoOrder['increment_id'], 'submitted', $message);
             } catch (Throwable $e) {
                 $message = sprintf('Order could not be submitted due to the following error: %s', $e->getMessage());
-                $this->log($message);
-                try {
-                    $this->_magentoApi('order.addComment', [$magentoOrder['increment_id'], 'failed_to_submit', $message]);
-                    $message = sprintf('Status of order # %s was changed to "failed_to_submit" in merchant site', $magentoOrder['increment_id']);
-                    $this->log($message);
-                } catch (Throwable $t) {
-                    $message = sprintf('Order status could not be changed in merchant site due to the following error: %s', $e->getMessage());
-                    $this->log($message);
-                }
+                $this->_addComment($magentoOrder['increment_id'], 'failed_to_submit', $message);
+                $this->log($errorPrefix.$message, self::ERR);
             }
         } finally {
             $this->_unlockOrderImport();
@@ -425,7 +426,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                     'updated_at' => array('from' => $updatedAtMin, 'to' => $updatedAtMax),
                     'status' => array('in' => $statuses),
                 ));
-                $data = $this->_magentoApi('order.list', $filters);
+                $data = $this->_magentoApi('shipstream_order.selectFields', $filters);
                 foreach ($data as $orderData) {
                     if (strcmp($orderData['updated_at'], $updatedAtMin) > 0) {
                         $updatedAtMin = date('c', strtotime($orderData['updated_at'])+1);
@@ -499,6 +500,69 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     }
 
     /**
+     * Method is originally used for mapping Shopify shipping_lines to ShipStream shipping.
+     * Reused as is for Magento1/OM.
+     *
+     * Map Shopify shipping method
+     *
+     * @param array $data
+     * @return string
+     * @throws Plugin_Exception
+     */
+    protected function _getShippingMethod($data)
+    {
+        $shippingLines = $data['shipping_lines'];
+        if (empty($shippingLines)) {
+            $shippingLines = [['title' => 'unknown', 'code' => 'unknown', 'source' => 'unknown']];
+        }
+
+        // Extract shipping method
+        $_shippingMethod = NULL;
+        $rules           = preg_split('/[\n\r]+/', $this->getConfig('shipping_method_config'), NULL, PREG_SPLIT_NO_EMPTY);
+
+        foreach ($shippingLines as $shippingLine) {
+            if ($_shippingMethod === NULL) {
+                $_shippingMethod = $shippingLine['code'] ?? NULL;
+            }
+            foreach ($rules as $rule) {
+                if (!preg_match(self::SHIPPING_METHOD_PATTERN, $rule, $matches) || count($matches) !== 5) {
+                    throw new Plugin_Exception('Invalid shipping method rule');
+                }
+                unset($matches[0]);
+                [$shippingMethod, $field, $operator, $pattern] = array_values($matches);
+                $compareValue = empty($shippingLine[$field]) ? '' : $shippingLine[$field];
+                if ($operator == '=~') {
+                    if (@preg_match($pattern, NULL, $matches) === FALSE && $matches === NULL) {
+                        throw new Plugin_Exception('Invalid RegEx expression after "=~" operator');
+                    }
+                    if (preg_match($pattern, $compareValue)) {
+                        $_shippingMethod = $shippingMethod;
+                        break 2;
+                    }
+                }
+                else {
+                    $pattern = str_replace(['"', "'"], '', $pattern);
+                    if ($operator == '=' && $compareValue == $pattern) {
+                        $_shippingMethod = $shippingMethod;
+                        break 2;
+                    }
+                    else {
+                        if ($operator == '!=' && $compareValue != $pattern) {
+                            $_shippingMethod = $shippingMethod;
+                            break 2;
+                        }
+                    }
+                }
+            }
+        }
+        if (empty($_shippingMethod)) {
+            throw new Plugin_Exception('Cannot identify shipping method.');
+        }
+
+        return $_shippingMethod;
+    }
+
+    /**
      * Check if the client's order/shipment item can be fulfilled
      *
      * Client Magento product types:
@@ -520,6 +584,26 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     protected function _checkItem(array $item)
     {
         return (isset($item['product_type']) && $item['product_type'] == 'simple');
+    }
+
+    /**
+     * Update Magento order status and add comment.
+     *
+     * @param string $orderIncrementId 
+     * @param string $orderStatus 
+     * @param string $comment 
+     * @return void 
+     */
+    protected function _addComment(string $orderIncrementId, string $orderStatus, string $comment = '')
+    {
+        try {
+            $this->_magentoApi('order.addComment', [$orderIncrementId, $orderStatus, $comment]);
+            $message = sprintf('Status of order # %s was changed to %s in merchant site, comment: %s', $orderIncrementId, $orderStatus, $comment);
+            $this->log($message);
+        } catch (Throwable $e) {
+            $message = sprintf('Order status could not be changed in merchant site due to the following error: %s', $e->getMessage());
+            $this->log($message, self::ERR);
+        }
     }
 
     /**
