@@ -141,6 +141,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
 
         // Prepare order and shipment items
         $orderItems = [];
+        $skus = [];
         foreach ($magentoOrder['items'] as $item) {
             if ( ! $this->_checkItem($item)) continue;
             $qty = max($item['qty_ordered'] - $item['qty_canceled'] - $item['qty_refunded'] - $item['qty_shipped'], 0);
@@ -149,6 +150,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                     'sku' => $item['sku'],
                     'qty' => $qty,
                 ];
+                $skus[] = $item['sku'];
             }
         }
         if (empty($orderItems)) {
@@ -180,14 +182,14 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         try {
             if ($script = $this->getConfig('filter_script')) {
                 // Add product info for use in script
-                // TODO - use product.search for single lookup?
+                // API product.search returns an array of products or an empty array in key 'result'.
+                $products = $this->call('product.search', [['sku' => ['in' => $skus]]])['result'];
                 foreach ($newOrderData['items'] as &$item) {
-                    try {
-                        $item['product'] = $this->call('product.info', [$item['sku']]);
-                    }
-                    catch (Plugin_Exception $e) {
-                        if ($e->getCode() == 101) {
-                            $item['product'] = NULL;
+                    $item['product'] = NULL;
+                    foreach ($products as $product) {
+                        if ($product['sku'] == $item['sku']) {
+                            $item['product'] = $product;
+                            break;
                         }
                     }
                 }
