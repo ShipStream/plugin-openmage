@@ -93,7 +93,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
      */
     public function register_fulfillment_service()
     {
-        if ($this->_magentoApi('shipstream.set_config', ['warehouse_api_url', $this->getCallbackUrl('{{method}}')])) {
+        if ($this->_magentoApi('shipstream.set_config', ['warehouse_api_url', $this->getCallbackUrl(null)])) {
             $this->setState('fulfillment_service_registered', TRUE);
         }
     }
@@ -375,6 +375,28 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     {
         $this->_unlockOrderImport();
         return TRUE;
+    }
+
+    /**
+     * Callback to import an order.
+     *
+     * @param array $query
+     * @return string|true
+     */
+    public function syncOrder($query)
+    {
+        if (isset($query['increment_id'])) {
+            $object = new Varien_Object(['increment_id' => $query['increment_id']]);
+            try {
+                $this->importOrderEvent($object);
+                return TRUE;
+            } catch (Throwable $e) {
+                $error = $e->getMessage();
+            }
+        } else {
+            $error = 'Invalid query.';
+        }
+        return json_encode(['errors' => $error]);
     }
 
     /*********************
