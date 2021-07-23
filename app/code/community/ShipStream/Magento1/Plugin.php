@@ -386,9 +386,8 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     public function syncOrder($query)
     {
         if (isset($query['increment_id'])) {
-            $object = new Varien_Object(['increment_id' => $query['increment_id']]);
             try {
-                $this->importOrderEvent($object);
+                $this->addEvent('importOrderEvent', ['increment_id' => $query['increment_id']]);
                 return TRUE;
             } catch (Throwable $e) {
                 $error = $e->getMessage();
