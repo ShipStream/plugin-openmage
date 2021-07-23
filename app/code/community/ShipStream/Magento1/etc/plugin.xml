@@ -38,6 +38,7 @@
         <routes>
             <inventoryWithLock>inventoryWithLock</inventoryWithLock>
             <unlockOrderImport>unlockOrderImport</unlockOrderImport>
+            <syncOrder>syncOrder</syncOrder>
         </routes>
         <config>
             <api_url translate="label comment" module="plugin">
