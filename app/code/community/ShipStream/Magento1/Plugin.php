@@ -149,6 +149,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                 $orderItems[] = [
                     'sku' => $item['sku'],
                     'qty' => $qty,
+                    'order_item_ref' => $item['item_id']
                 ];
                 $skus[] = $item['sku'];
             }
@@ -356,7 +357,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             $this->_lockOrderImport();
             $rows = $this->call('inventory.list', empty($query['sku']) ? NULL : strval($query['sku']));
             foreach ($rows as $row) {
-                $skus[$row['sku']] = intval($row['qty_available']);
+                $skus[$row['sku']] = intval($row['qty_advertised']);
             }
             $result['skus'] = $skus;
         } catch (Plugin_Exception $e) {
