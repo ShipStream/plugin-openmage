@@ -11,6 +11,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
 
     const STATE_ORDER_LAST_SYNC_AT = 'order_last_sync_at';
     const STATE_LOCK_ORDER_PULL = 'lock_order_pull';
+    const STATE_FULFILLMENT_SERVICE_REGISTERED = 'fulfillment_service_registered';
 
     const SHIPPING_METHOD_PATTERN = '#^([\w-]+)\s*:\s*(title|code|source)\s*(=~|!=|=)\s*(.+)#';
 
@@ -37,6 +38,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $lines[] = sprintf('Magento Version: %s', $info['magento_version'] ?? 'undefined');
         $lines[] = sprintf('OpenMage Version: %s', $info['openmage_version'] ?? 'undefined');
         $lines[] = sprintf('ShipStream Sync Version: %s', $info['shipstream_sync_version'] ?? 'undefined');
+        $lines[] = sprintf('Service Status: %s', $this->isFulfillmentServiceRegistered() ? 'Registered' : 'Unregistered');
         return $lines;
     }
     
@@ -85,7 +87,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
      */
     public function isFulfillmentServiceRegistered()
     {
-        return $this->getState('fulfillment_service_registered');
+        return $this->getState(self::STATE_FULFILLMENT_SERVICE_REGISTERED);
     }
 
     /**
@@ -94,7 +96,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     public function register_fulfillment_service()
     {
         if ($this->_magentoApi('shipstream.set_config', ['warehouse_api_url', $this->getCallbackUrl(null)])) {
-            $this->setState('fulfillment_service_registered', TRUE);
+            $this->setState(self::STATE_FULFILLMENT_SERVICE_REGISTERED, TRUE);
         }
     }
 
@@ -104,7 +106,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     public function unregister_fulfillment_service()
     {
         $this->_magentoApi('shipstream.set_config', ['warehouse_api_url', NULL]);
-        $this->setState('fulfillment_service_registered', NULL);
+        $this->setState(self::STATE_FULFILLMENT_SERVICE_REGISTERED, NULL);
     }
 
     /*****************
@@ -664,5 +666,18 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             );
         }
         return $this->_client->call($method, $args, $canRetry);
+    }
+
+    /**
+     * Unregister everything and delete all state data
+     */
+    public function uninstall()
+    {
+        try { $this->unregister_fulfillment_service(); } catch (Exception $e) {}
+        $this->setState([
+            self::STATE_LOCK_ORDER_PULL => NULL,
+            self::STATE_ORDER_LAST_SYNC_AT => NULL,
+            self::STATE_FULFILLMENT_SERVICE_REGISTERED => NULL,
+        ]);
     }
 }
