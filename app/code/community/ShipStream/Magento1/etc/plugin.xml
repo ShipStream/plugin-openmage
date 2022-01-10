@@ -43,36 +43,51 @@
         <config>
             <api_url translate="label comment" module="plugin">
                 <label>OpenMage/Magento API Url</label>
-                <type>text</type>
+                <type>url</type>
                 <sort_order>5</sort_order>
-                <validate>required-entry</validate>
+                <required>1</required>
                 <comment><![CDATA[<strong>Example:</strong> https://storename.com/api/soap/]]></comment>
             </api_url>
             <api_login translate="label comment" module="plugin">
                 <label>SOAP/XML-RPC User Name</label>
                 <type>text</type>
                 <sort_order>6</sort_order>
-                <validate>required-entry</validate>
+                <required>1</required>
+                <cssClass>validate-alphanum-with-spaces</cssClass>
             </api_login>
             <api_password translate="label" module="plugin">
                 <label>SOAP/XML-RPC API Key</label>
                 <type>obscure</type>
                 <sort_order>7</sort_order>
-                <validate>required-entry</validate>
+                <required>1</required>
             </api_password>
-            <auto_fulfill>
-                <label>Auto-Fulfill Orders</label>
-                <type>text</type>
+            <auto_fulfill_status>
+                <label>Auto-Fulfill Order Status</label>
+                <type>select</type>
+                <source>[{"label":"","value":""},{"label":"Disabled","value":"-"},{"label":"Processing","value":"processing"},{"label":"Ready to Ship","value":"ready_to_ship"},{"label":"Custom (advanced)","value":"custom"}]</source>
                 <comment><![CDATA[
-                Specify a comma-separated list of order status codes for which orders should be automatically fulfilled.<br/>
-                Example: <i>Processing</i> or <i>Ready to Ship</i>
+                Orders in this status will be automatically imported. Upon successful import the order status is advanced to 'Submitted'.
+                Choosing 'Ready to Ship' will require a user or some custom automation process to advance the order to 'Ready to Ship' status before it can be imported.
                 ]]></comment>
                 <sort_order>10</sort_order>
-            </auto_fulfill>
+            </auto_fulfill_status>
+            <auto_fulfill_custom>
+                <label>Custom Auto-Fulfill Statuses</label>
+                <type>text</type>
+                <comment><![CDATA[
+                This option only has an effect if "Custom (advanced)" is chosen above.<br/>
+                Specify a comma-separated list of order status <b>codes</b> for which orders should be automatically fulfilled.<br/>
+                Example: <i>processing,ready_to_ship</i>
+                ]]></comment>
+                <sort_order>10</sort_order>
+            </auto_fulfill_custom>
             <sync_orders_since>
                 <label>Sync Orders Since</label>
                 <type>date</type>
                 <sort_order>20</sort_order>
+                <comment><![CDATA[
+                Required only to use the 'Sync Orders' button.
+                ]]></comment>
             </sync_orders_since>
         </config>
         <crontab>

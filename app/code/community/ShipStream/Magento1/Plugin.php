@@ -432,15 +432,22 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $to = date(self::DATE_FORMAT, $now);
 
         // Order statuses for which orders should be automatically fulfilled
-        $statuses = $this->getConfig('auto_fulfill');
-        $statuses = preg_split('/\s*,\s*/', trim($statuses), NULL, PREG_SPLIT_NO_EMPTY);
-        if ( ! is_array($statuses)) {
-            $statuses = $statuses ? array($statuses) : array();
+        $status = $this->getConfig('auto_fulfill_status');
+        if ($status === 'custom') {
+            $statuses = $this->getConfig('auto_fulfill_custom');
+            $statuses = preg_split('/\s*,\s*/', trim($statuses), NULL, PREG_SPLIT_NO_EMPTY);
+            if ( ! is_array($statuses)) {
+                $statuses = $statuses ? array($statuses) : array();
+            }
+            // Sanitize - map "Ready To Ship" to "ready_to_ship"
+            $statuses = array_map(function($status) {
+                return strtolower(str_replace(' ', '_', $status));
+            }, $statuses);
+        } else if ($status && $status !== '-') {
+            $statuses = [strtolower(str_replace(' ', '_', $status))];
+        } else {
+            $statuses = NULL;
         }
-        // Sanitize - map "Ready To Ship" to "ready_to_ship"
-        $statuses = array_map(function($status) {
-            return strtolower(str_replace(' ', '_', $status));
-        }, $statuses);
 
         // Automatic fulfillment. When a new order is found in the specified statuses,
         // an order should be created on the ShipStream side and status updated to Submitted.
