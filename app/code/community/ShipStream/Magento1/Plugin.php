@@ -649,9 +649,10 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                     'password' => $this->getConfig('api_password'),
                     'debug'    => $this->isDebug(),
                 ), array(
-                    'timeout'   => 90,
-                    'useragent' => 'ShipStream_Magento1',
-                    'keepalive' => TRUE,
+                    'connection_timeout' => 5,
+                    'user_agent' => 'ShipStream Magento1 Plugin',
+                    'keep_alive' => TRUE,
+                    'cache_wsdl' => WSDL_CACHE_DISK,
                 )
             );
         }
