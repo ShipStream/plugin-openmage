@@ -80,6 +80,12 @@
                 ]]></comment>
                 <sort_order>10</sort_order>
             </auto_fulfill_custom>
+            <filter_script>
+                <label>Order Transform Script</label>
+                <type>ace</type>
+                <comment><![CDATA[JavaScript for modifying order's data before the order creation.]]></comment>
+                <sort_order>35</sort_order>
+            </filter_script>
             <sync_orders_since>
                 <label>Sync Orders Since</label>
                 <type>date</type>

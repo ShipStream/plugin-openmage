@@ -123,7 +123,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     public function importOrderEvent(Varien_Object $data)
     {
         $orderIncrementId = $data->getData('increment_id');
-        $errorPrefix = sprintf('Magento Order # %s: ', $orderIncrementId);
+        $logPrefix = sprintf('Magento Order # %s: ', $orderIncrementId);
 
         // Check if order exists locally and if not, create new local order
         $result = $this->call('order.search', [['order_ref' => $orderIncrementId],[], []]);
@@ -201,20 +201,20 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                 try {
                     $newOrderData = $this->applyScript($script, ['order' => $newOrderData, 'magentoOrder' => $magentoOrder], 'order');
                 } catch (Mage_Core_Exception $e) {
-                    throw new Plugin_Exception($errorPrefix.$e->getMessage(), 102);
+                    throw new Plugin_Exception($e->getMessage(), 102);
                 } catch (Exception $e) {
-                    throw new Plugin_Exception($errorPrefix.'An unexpected error occurred while applying the order transform script.', 102, $e);
+                    throw new Plugin_Exception('An unexpected error occurred while applying the Order Transform Script.', 102, $e);
                 }
                 if ( ! array_key_exists('store', $newOrderData)
                     || empty($newOrderData['items'])
                     || empty($newOrderData['address'])
                     || empty($newOrderData['options'])
                 ) {
-                    throw new Plugin_Exception($errorPrefix.sprintf('The order transform script did not return the data expected.'));
+                    throw new Plugin_Exception('The Order Transform Script did not return the data expected.');
                 }
                 if ( ! empty($newOrderData['skip'])) {
                     // do not submit order
-                    $this->log($errorPrefix.sprintf('Order has been skipped by a script.'),self::DEBUG);
+                    $this->log($logPrefix.'Order has been skipped by the Order Transform Script.', self::DEBUG);
                     return;
                 }
                 foreach ($newOrderData['items'] as $k => $item) {
@@ -223,41 +223,47 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
 
                     if ( ! empty($item['skip'])) {
                         //  Skipping an item
-                        $this->log($errorPrefix.sprintf('SKU "%s" has been skipped by a script.', $newOrderData['items'][$k]['sku']), self::DEBUG);
+                        $this->log($logPrefix.sprintf('SKU "%s" has been skipped by the Order Transform Script.', $newOrderData['items'][$k]['sku']), self::DEBUG);
                         unset($newOrderData['items'][$k]);
                     }
                 }
                 if (empty($newOrderData['items'])) {
                     // no items to submit, all were skipped
-                    $this->log($errorPrefix.sprintf('All SKUs have been skipped.'), self::DEBUG);
+                    $this->log($logPrefix.'All SKUs have been skipped by the Order Transform Script.', self::DEBUG);
                     return;
                 }
             }
-        } catch (Throwable $e) {
-            $message = sprintf('Order could not be submitted due to the following error: %s', $e->getMessage());
-            $this->_addComment($magentoOrder['increment_id'], 'failed_to_submit', $message);
-            $this->log($errorPrefix.$message, self::ERR);
+        } catch (Plugin_Exception $e) {
+            if (empty($e->getSubjectType())) {
+                $e->setSubject('Magento Order', $magentoOrder['increment_id']);
+            }
+            try {
+                $message = sprintf('Order could not be submitted due to the following Order Transform Script error: %s', $e->getMessage());
+                $this->_addComment($magentoOrder['increment_id'], 'failed_to_submit', $message);
+            } catch (Exception $ex) {}
             throw $e;
         }
 
         // Submit order
         $this->_lockOrderImport();
         try {
+            $result = $this->call('order.create', [$newOrderData['store'], $newOrderData['items'], $newOrderData['address'], $newOrderData['options']]);
+            $this->log(sprintf('Created ShipStream Order # %s for Magento Order # %s', $result['unique_id'], $magentoOrder['increment_id']));
+        } catch (Plugin_Exception $e) {
+            if (empty($e->getSubjectType())) {
+                $e->setSubject('Magento Order', $magentoOrder['increment_id']);
+            }
             try {
-                $result = $this->call('order.create', [$newOrderData['store'], $newOrderData['items'], $newOrderData['address'], $newOrderData['options']]);
-                $message = sprintf('Created ShipStream Order # %s', $result['unique_id']);
-                $this->log($message);
-
-                // Update Magento order status and add comment
-                $this->_addComment($magentoOrder['increment_id'], 'submitted', $message);
-            } catch (Throwable $e) {
                 $message = sprintf('Order could not be submitted due to the following error: %s', $e->getMessage());
                 $this->_addComment($magentoOrder['increment_id'], 'failed_to_submit', $message);
-                $this->log($errorPrefix.$message, self::ERR);
-            }
+            } catch (Exception $ex) {}
+            throw $e;
         } finally {
             $this->_unlockOrderImport();
         }
+
+        // Update Magento order status and add comment
+        $this->_addComment($magentoOrder['increment_id'], 'submitted', sprintf('Created ShipStream Order # %s', $result['unique_id']));
     }
 
     /**
