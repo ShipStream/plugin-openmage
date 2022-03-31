@@ -13,8 +13,6 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     const STATE_LOCK_ORDER_PULL = 'lock_order_pull';
     const STATE_FULFILLMENT_SERVICE_REGISTERED = 'fulfillment_service_registered';
 
-    const SHIPPING_METHOD_PATTERN = '#^([\w-]+)\s*:\s*(title|code|source)\s*(=~|!=|=)\s*(.+)#';
-
     /** @var ShipStream_Magento1_Client */
     protected $_client = NULL;
 
@@ -166,7 +164,10 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             'shipping_method' => $this->_getShippingMethod(
                 [
                     'shipping_lines' => [
-                        ['code' => $magentoOrder['shipping_method']]
+                        [
+                            'shipping_method' => $magentoOrder['shipping_method'],
+                            'shipping_description' => $magentoOrder['shipping_description'],
+                        ]
                     ]
                 ]
             ),
@@ -554,29 +555,37 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     {
         $shippingLines = $data['shipping_lines'];
         if (empty($shippingLines)) {
-            $shippingLines = [['title' => 'unknown', 'code' => 'unknown', 'source' => 'unknown']];
+            $shippingLines = [['shipping_description' => 'unknown', 'shipping_method' => 'unknown']];
         }
 
         // Extract shipping method
         $_shippingMethod = NULL;
-        $rules           = preg_split('/[\n\r]+/', $this->getConfig('shipping_method_config'), NULL, PREG_SPLIT_NO_EMPTY);
+        $rules = $this->getConfig('shipping_method_config');
+        $rules = json_decode($rules, TRUE);
+        $rules = empty($rules) ? [] : $rules;
 
         foreach ($shippingLines as $shippingLine) {
             if ($_shippingMethod === NULL) {
-                $_shippingMethod = $shippingLine['code'] ?? NULL;
+                $_shippingMethod = $shippingLine['shipping_method'] ?? NULL;
             }
             foreach ($rules as $rule) {
-                if (!preg_match(self::SHIPPING_METHOD_PATTERN, $rule, $matches) || count($matches) !== 5) {
-                    throw new Plugin_Exception('Invalid shipping method rule');
+                if (count($rule) != 4) {
+                    throw new Plugin_Exception('Invalid shipping method rule.');
                 }
-                unset($matches[0]);
-                [$shippingMethod, $field, $operator, $pattern] = array_values($matches);
+                foreach (['shipping_method', 'field', 'operator', 'pattern'] as $field) {
+                    if (empty($rule[$field])) {
+                        throw new Plugin_Exception('Invalid shipping method rule.');
+                    }
+                }
+                list($shippingMethod, $field, $operator, $pattern) = [
+                    $rule['shipping_method'], $rule['field'], $rule['operator'], $rule['pattern']
+                ];
                 $compareValue = empty($shippingLine[$field]) ? '' : $shippingLine[$field];
                 if ($operator == '=~') {
-                    if (@preg_match($pattern, NULL, $matches) === FALSE && $matches === NULL) {
-                        throw new Plugin_Exception('Invalid RegEx expression after "=~" operator');
+                    if (@preg_match('/^'.$pattern.'$/i', NULL, $matches) === FALSE && $matches === NULL) {
+                        throw new Plugin_Exception('Invalid RegEx expression after "=~" operator', NULL, NULL, 'Get shipping method');
                     }
-                    if (preg_match($pattern, $compareValue)) {
+                    if (preg_match('/^'.$pattern.'$/i', $compareValue)) {
                         $_shippingMethod = $shippingMethod;
                         break 2;
                     }
@@ -597,7 +606,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             }
         }
         if (empty($_shippingMethod)) {
-            throw new Plugin_Exception('Cannot identify shipping method.');
+            throw new Plugin_Exception('Cannot identify shipping method.', NULL, NULL, 'Get shipping method');
         }
 
         return $_shippingMethod;
