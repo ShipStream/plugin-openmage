@@ -249,7 +249,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $this->_lockOrderImport();
         try {
             $result = $this->call('order.create', [$newOrderData['store'], $newOrderData['items'], $newOrderData['address'], $newOrderData['options']]);
-            $this->log(sprintf('Created ShipStream Order # %s for Magento Order # %s', $result['unique_id'], $magentoOrder['increment_id']));
+            $this->log(sprintf('Created %s Order # %s for Magento Order # %s', $this->getAppTitle(), $result['unique_id'], $magentoOrder['increment_id']));
         } catch (Plugin_Exception $e) {
             if (empty($e->getSubjectType())) {
                 $e->setSubject('Magento Order', $magentoOrder['increment_id']);
@@ -264,7 +264,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         }
 
         // Update Magento order status and add comment
-        $this->_addComment($magentoOrder['increment_id'], 'submitted', sprintf('Created ShipStream Order # %s', $result['unique_id']));
+        $this->_addComment($magentoOrder['increment_id'], 'submitted', sprintf('Created %s Order # %s', $this->getAppTitle(), $result['unique_id']));
     }
 
     /**

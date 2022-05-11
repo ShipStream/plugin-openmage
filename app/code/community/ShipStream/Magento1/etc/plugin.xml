@@ -61,7 +61,7 @@
                 <required>1</required>
             </api_password>
             <auto_fulfill_status>
-                <label>Auto-Fulfill Order Statuses</label>
+                <label>Auto-Fulfill Order Status</label>
                 <type>select</type>
                 <source>[{"label":"","value":""},{"label":"Disabled","value":"-"},{"label":"Processing","value":"processing"},{"label":"Ready to Ship","value":"ready_to_ship"},{"label":"Custom (advanced)","value":"custom"}]</source>
                 <comment><![CDATA[
@@ -69,6 +69,7 @@
                 Choosing 'Ready to Ship' will require a user or some custom automation process to advance the order to 'Ready to Ship' status before it can be imported.
                 ]]></comment>
                 <sort_order>40</sort_order>
+                <required>1</required>
             </auto_fulfill_status>
             <auto_fulfill_custom>
                 <label>Custom Auto-Fulfill Statuses</label>
@@ -85,7 +86,12 @@
                 <type>custom</type>
                 <class>ShipStream_Magento1_ShippingMethodConfig</class>
                 <sort_order>60</sort_order>
-                <comment><![CDATA[Translate Magento shipping method to the indicated shipping method. Rules are evaluated from top to bottom and the first match will "win".]]></comment>
+                <comment><![CDATA[
+                Translate the Magento Shipping Method (code) or Shipping Description (title) to the indicated shipping method.
+                Rules are evaluated from top to bottom and the first match will "win".
+                The Magento-supported methods for FedEx, UPS and USPS do not require translation if there is
+                a simple one-to-one relationship.
+                ]]></comment>
             </shipping_method_config>
             <filter_script>
                 <label>Order Transform Script</label>
