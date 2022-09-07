@@ -46,7 +46,7 @@ CSS;
         <div class="magento1-config">
             <div class="magento1-config-row">
                 <div class="nobr">
-                    <p><label>{$helper->__('If Magento')}</label></p>
+                    <p><label>{$helper->__('If the Magento')}</label></p>
                 </div>
                 <div>
                     <div class="field-row">
@@ -61,7 +61,7 @@ CSS;
                         </select>
                     </div>
                 </div>
-                <div>
+                <div v-if="config.field">
                     <div class="field-row">
                         <select v-model="config.operator"
                             :id = "'config-'+config.id+'-operator'"
@@ -74,11 +74,11 @@ CSS;
                         </select>
                     </div>
                 </div>
-                <div class="nobr">
+                <div v-if="config.field && config.operator" class="nobr">
                     <label v-if="this.config.operator === '=~'">{$helper->__('the pattern')}</label>
                     <label v-else>{$helper->__('the value')}</label>
                 </div>
-                <div class="config-pattern">
+                <div v-if="config.field && config.operator" class="config-pattern">
                     <div class="field-row nobr">
                         <template v-if="this.config.operator === '=~'">/^</template><input v-model="config.pattern"
                             :id = "'config-'+config.id+'-pattern'"
@@ -88,7 +88,7 @@ CSS;
                     </div>
                 </div>
             </div>
-            <div class="magento1-config-row">
+            <div v-if="config.field && config.operator" class="magento1-config-row">
                 <div class="nobr">
                     <label>{$helper->__('then use')}</label>
                 </div>

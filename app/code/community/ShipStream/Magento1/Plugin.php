@@ -200,7 +200,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                 unset($item);
 
                 try {
-                    $newOrderData = $this->applyScript($script, ['order' => $newOrderData, 'magentoOrder' => $magentoOrder], 'order');
+                    $newOrderData = $this->applyScriptForOrder($script, $newOrderData, ['shopifyOrder' => $magentoOrder]);
                 } catch (Mage_Core_Exception $e) {
                     throw new Plugin_Exception($e->getMessage(), 102);
                 } catch (Exception $e) {
@@ -444,7 +444,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $status = $this->getConfig('auto_fulfill_status');
         if ($status === 'custom') {
             $statuses = $this->getConfig('auto_fulfill_custom');
-            $statuses = preg_split('/\s*,\s*/', trim($statuses), NULL, PREG_SPLIT_NO_EMPTY);
+            $statuses = preg_split('/\s*,\s*/', trim($statuses), -1, PREG_SPLIT_NO_EMPTY);
             if ( ! is_array($statuses)) {
                 $statuses = $statuses ? array($statuses) : array();
             }
