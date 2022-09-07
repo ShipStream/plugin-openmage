@@ -39,7 +39,17 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $lines[] = sprintf('Service Status: %s', $this->isFulfillmentServiceRegistered() ? 'Registered' : 'Unregistered');
         return $lines;
     }
-    
+
+    /**
+     * @return void
+     */
+    public function reinstall()
+    {
+        if ($this->isFulfillmentServiceRegistered()) {
+            $this->register_fulfillment_service();
+        }
+    }
+
     /**
      * Trigger an inventory sync from the Magento side which is more atomic
      *
