@@ -210,7 +210,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                 unset($item);
 
                 try {
-                    $newOrderData = $this->applyScriptForOrder($script, $newOrderData, ['shopifyOrder' => $magentoOrder]);
+                    $newOrderData = $this->applyScriptForOrder($script, $newOrderData, ['magentoOrder' => $magentoOrder]);
                 } catch (Mage_Core_Exception $e) {
                     throw new Plugin_Exception($e->getMessage(), 102);
                 } catch (Exception $e) {
