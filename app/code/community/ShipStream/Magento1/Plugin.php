@@ -696,13 +696,16 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     /**
      * Unregister everything and delete all state data
      */
-    public function uninstall()
+    public function deactivate(): array
     {
-        try { $this->unregister_fulfillment_service(); } catch (Exception $e) {}
+        $errors = [];
+        try { $this->unregister_fulfillment_service(); } catch (Exception $e) { $errors[] = 'Warning: '.$e->getMessage(); }
         $this->setState([
             self::STATE_LOCK_ORDER_PULL => NULL,
             self::STATE_ORDER_LAST_SYNC_AT => NULL,
             self::STATE_FULFILLMENT_SERVICE_REGISTERED => NULL,
         ]);
+        return $errors;
     }
+
 }
