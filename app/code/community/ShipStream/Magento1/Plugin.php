@@ -28,7 +28,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
      * @return array
      * @throws Plugin_Exception
      */
-    public function connectionDiagnostics()
+    public function connectionDiagnostics(bool $super): array
     {
         $info = $this->_magentoApi('shipstream.info');
         $lines = [];
@@ -43,7 +43,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     /**
      * @return void
      */
-    public function reinstall()
+    public function reinstall(): array
     {
         if ($this->isFulfillmentServiceRegistered()) {
             $this->register_fulfillment_service();
