@@ -298,6 +298,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             $result = $this->call('order.create', [$newOrderData['store'], $newOrderData['items'], $newOrderData['address'], $newOrderData['options']]);
             $this->log(sprintf('Created %s Order # %s for Magento Order # %s', $this->getAppTitle(), $result['unique_id'], $magentoOrder['increment_id']));
         } catch (Plugin_Exception $e) {
+            $this->log(sprintf("Failed to submit order: %s\n%s", $e->getMessage(), json_encode($newOrderData)));
             if (empty($e->getSubjectType())) {
                 $e->setSubject('Magento Order', $magentoOrder['increment_id']);
             }
