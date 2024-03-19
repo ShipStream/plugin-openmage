@@ -228,6 +228,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             'options' => $additionalData,
             'timestamp' => new \DateTime('now', $this->getTimeZone()),
         ];
+        $output = NULL;
 
         // Apply user scripts
         try {
@@ -247,7 +248,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                 unset($item);
 
                 try {
-                    $newOrderData = $this->applyScriptForOrder($script, $newOrderData, ['magentoOrder' => $magentoOrder]);
+                    $newOrderData = $this->applyScriptForOrder($script, $newOrderData, ['magentoOrder' => $magentoOrder], $output);
                 } catch (Mage_Core_Exception $e) {
                     throw new Plugin_Exception($e->getMessage(), 102);
                 } catch (Exception $e) {
@@ -297,6 +298,16 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         try {
             $result = $this->call('order.create', [$newOrderData['store'], $newOrderData['items'], $newOrderData['address'], $newOrderData['options']]);
             $this->log(sprintf('Created %s Order # %s for Magento Order # %s', $this->getAppTitle(), $result['unique_id'], $magentoOrder['increment_id']));
+            if ($output) {
+                if ( ! Mage::getIsDeveloperMode()) {
+                    $output = substr($output, 0, 512);
+                }
+                try {
+                    $this->call('order.comment', [$result['unique_id'], sprintf("Script output from \"Order Transform Script\":\n<pre>%s</pre>", $output)]);
+                } catch (Exception $e) {
+                    $this->log(sprintf('Error saving Order Transform Script output comment on order %s: %s', $result['unique_id'], $e->getMessage()), self::ERR);
+                }
+            }
         } catch (Plugin_Exception $e) {
             $this->log(sprintf("Failed to submit order: %s\n%s", $e->getMessage(), json_encode($newOrderData)));
             if (empty($e->getSubjectType())) {
