@@ -16,11 +16,6 @@
             ]]></description>
         </info>
         <actions>
-            <register_fulfillment_service>
-                <label>Register Service</label>
-                <comment>Registers the ShipStream service in the OpenMage/Magento installation. Required for proper operation.</comment>
-                <unless>isFulfillmentServiceRegistered</unless>
-            </register_fulfillment_service>
             <sync_inventory>
                 <label>Sync Inventory</label>
                 <comment>Trigger inventory sync (pull from Magento).</comment>
@@ -29,11 +24,6 @@
                 <label>Sync Orders</label>
                 <comment>Synchronize orders since the configured "Sync Orders Since" date.</comment>
             </sync_orders>
-            <unregister_fulfillment_service>
-                <label>Unregister Service</label>
-                <comment>Unregister the ShipStream service.</comment>
-                <if>isFulfillmentServiceRegistered</if>
-            </unregister_fulfillment_service>
         </actions>
         <routes>
             <inventoryWithLock>inventoryWithLock</inventoryWithLock>

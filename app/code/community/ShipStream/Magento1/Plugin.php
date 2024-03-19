@@ -36,18 +36,53 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $lines[] = sprintf('Magento Version: %s', $info['magento_version'] ?? 'undefined');
         $lines[] = sprintf('OpenMage Version: %s', $info['openmage_version'] ?? 'undefined');
         $lines[] = sprintf('ShipStream Sync Version: %s', $info['shipstream_sync_version'] ?? 'undefined');
-        $lines[] = sprintf('Service Status: %s', $this->isFulfillmentServiceRegistered() ? 'Registered' : 'Unregistered');
+        $lines[] = sprintf('Service Status: %s', $this->isFulfillmentServiceRegistered() ? '✅ Registered' : '🚨 Not registered');
         return $lines;
     }
 
     /**
-     * @return void
+     * Activate the plugin
+     *
+     * @return string[]
+     */
+    public function activate(): array
+    {
+        $warnings = [];
+        try {
+            $this->register_fulfillment_service();
+        } catch (Plugin_Exception $e) {
+            $warnings[] = $e->getMessage();
+        }
+        return $warnings;
+    }
+
+    /**
+     * Deactivate the plugin
+     *
+     * @return string[]
+     */
+    public function deactivate(): array
+    {
+        $errors = [];
+        try { $this->unregister_fulfillment_service(); } catch (Plugin_Exception $e) { $errors[] = $e->getMessage(); }
+        try {
+            $this->setState([
+                self::STATE_LOCK_ORDER_PULL => NULL,
+                self::STATE_ORDER_LAST_SYNC_AT => NULL,
+                self::STATE_FULFILLMENT_SERVICE_REGISTERED => NULL,
+            ]);
+        } catch (Plugin_Exception $e) {
+            $errors[] = $e->getMessage();
+        }
+        return $errors;
+    }
+
+    /**
+     * @return string[]
      */
     public function reinstall(): array
     {
-        if ($this->isFulfillmentServiceRegistered()) {
-            $this->register_fulfillment_service();
-        }
+        return $this->activate();
     }
 
     /**
@@ -100,6 +135,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
 
     /**
      * Register fulfillment service
+     * @throws Plugin_Exception
      */
     public function register_fulfillment_service()
     {
@@ -110,6 +146,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
 
     /**
      * Unregister fulfillment service
+     * @throws Plugin_Exception
      */
     public function unregister_fulfillment_service()
     {
@@ -691,21 +728,6 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             );
         }
         return $this->_client->call($method, $args, $canRetry);
-    }
-
-    /**
-     * Unregister everything and delete all state data
-     */
-    public function deactivate(): array
-    {
-        $errors = [];
-        try { $this->unregister_fulfillment_service(); } catch (Exception $e) { $errors[] = 'Warning: '.$e->getMessage(); }
-        $this->setState([
-            self::STATE_LOCK_ORDER_PULL => NULL,
-            self::STATE_ORDER_LAST_SYNC_AT => NULL,
-            self::STATE_FULFILLMENT_SERVICE_REGISTERED => NULL,
-        ]);
-        return $errors;
     }
 
 }
