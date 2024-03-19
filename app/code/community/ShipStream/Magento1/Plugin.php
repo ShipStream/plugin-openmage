@@ -313,6 +313,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             if (empty($e->getSubjectType())) {
                 $e->setSubject('Magento Order', $magentoOrder['increment_id']);
             }
+            $e->setSkipAutoRetry(TRUE); // Do not retry order creations as errors are usually not temporary
             try {
                 $message = sprintf('Order could not be submitted due to the following error: %s', $e->getMessage());
                 $this->_addComment($magentoOrder['increment_id'], 'failed_to_submit', $message);
