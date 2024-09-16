@@ -254,13 +254,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                 } catch (Exception $e) {
                     throw new Plugin_Exception('An unexpected error occurred while applying the Order Transform Script.', 102, $e);
                 }
-                if ( ! array_key_exists('store', $newOrderData)
-                    || empty($newOrderData['items'])
-                    || empty($newOrderData['address'])
-                    || empty($newOrderData['options'])
-                ) {
-                    throw new Plugin_Exception('The Order Transform Script did not return the data expected.');
-                }
+
                 if ( ! empty($newOrderData['skip'])) {
                     // do not submit order
                     $this->log($logPrefix.'Order has been skipped by the Order Transform Script.', self::DEBUG);
