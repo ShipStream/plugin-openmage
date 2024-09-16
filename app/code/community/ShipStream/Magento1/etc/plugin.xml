@@ -14,6 +14,9 @@
                 <b>Requires the <a href="https://github.com/ShipStream/openmage-sync" target="_blank">ShipStream Sync</a> extension!</b>
                 </p>
             ]]></description>
+            <callbacks>
+                <enabled>1</enabled>
+            </callbacks>
         </info>
         <actions>
             <sync_inventory>
