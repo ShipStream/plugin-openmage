@@ -105,6 +105,9 @@
             <every_ten_minutes>
                 <sync_orders>cron_sync_orders</sync_orders>
             </every_ten_minutes>
+            <every_one_hour>
+                <sync_inventory>cron_sync_inventory</sync_inventory>
+            </every_one_hour>
         </crontab>
     </ShipStream_Magento1>
 </plugin>

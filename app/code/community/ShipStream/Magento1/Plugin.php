@@ -49,7 +49,9 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     {
         $warnings = [];
         try {
-            $this->register_fulfillment_service();
+            if ($this->_magentoApi('shipstream.set_config', ['warehouse_api_url', $this->getCallbackUrl(null)])) {
+                $this->setState(self::STATE_FULFILLMENT_SERVICE_REGISTERED, TRUE);
+            }
         } catch (Plugin_Exception $e) {
             $warnings[] = $e->getMessage();
         }
@@ -64,12 +66,16 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     public function deactivate(): array
     {
         $errors = [];
-        try { $this->unregister_fulfillment_service(); } catch (Plugin_Exception $e) { $errors[] = $e->getMessage(); }
+        try {
+            $this->_magentoApi('shipstream.set_config', ['warehouse_api_url', NULL]);
+            $this->setState(self::STATE_FULFILLMENT_SERVICE_REGISTERED, NULL);
+        } catch (Plugin_Exception $e) {
+            $errors[] = $e->getMessage();
+        }
         try {
             $this->setState([
                 self::STATE_LOCK_ORDER_PULL => NULL,
                 self::STATE_ORDER_LAST_SYNC_AT => NULL,
-                self::STATE_FULFILLMENT_SERVICE_REGISTERED => NULL,
             ]);
         } catch (Plugin_Exception $e) {
             $errors[] = $e->getMessage();
@@ -92,10 +98,26 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
      */
     public function sync_inventory()
     {
-        $result = $this->_magentoApi('shipstream.sync_inventory', []);
-        if ( ! $result['success']) {
-            throw new Plugin_Exception($result['message']);
+        try {
+            $result = $this->_syncInventory();
+            $this->log('Manual inventory sync completed: '.json_encode($result));
+            return [
+                'Errors: '.($result['errors'] ? "\n".implode("\n", $result['errors']) : 'none'),
+                'Unchanged SKUs count: '.count($result['no_change']),
+                'Updated SKUs: '.($result['updated'] ? "\n".implode("\n", array_map(function($item) {
+                    return sprintf('%s: %d -> %d', $item['sku'], $item['old_qty'], $item['new_qty']);
+                }, $result['updated'])) : 'none'),
+            ];
+        } catch (Plugin_Exception $e) {
+            $this->logException($e);
+            throw $e;
         }
+    }
+
+    public function cron_sync_inventory()
+    {
+        $result = $this->_syncInventory();
+        $this->log('Cron inventory sync completed: '.json_encode($result));
     }
 
     /**
@@ -131,27 +153,6 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     public function isFulfillmentServiceRegistered()
     {
         return $this->getState(self::STATE_FULFILLMENT_SERVICE_REGISTERED);
-    }
-
-    /**
-     * Register fulfillment service
-     * @throws Plugin_Exception
-     */
-    public function register_fulfillment_service()
-    {
-        if ($this->_magentoApi('shipstream.set_config', ['warehouse_api_url', $this->getCallbackUrl(null)])) {
-            $this->setState(self::STATE_FULFILLMENT_SERVICE_REGISTERED, TRUE);
-        }
-    }
-
-    /**
-     * Unregister fulfillment service
-     * @throws Plugin_Exception
-     */
-    public function unregister_fulfillment_service()
-    {
-        $this->_magentoApi('shipstream.set_config', ['warehouse_api_url', NULL]);
-        $this->setState(self::STATE_FULFILLMENT_SERVICE_REGISTERED, NULL);
     }
 
     /*****************
@@ -467,6 +468,17 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     /*********************
      * Protected methods *
      *********************/
+
+    /**
+     * Inventory sync logic is handled on the Magento side, this just triggers it to start
+     *
+     * @return array{errors: string[], updated: array{sku: string, old_qty: int, new_qty: int}, no_change: string[]}
+     * @throws Plugin_Exception
+     */
+    protected function _syncInventory()
+    {
+        return $this->_magentoApi('shipstream.sync_inventory', []);
+    }
 
     /**
      * Import orders
