@@ -250,8 +250,8 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
 
                 try {
                     $newOrderData = $this->applyScriptForOrder($script, $newOrderData, ['magentoOrder' => $magentoOrder], $output);
-                } catch (Mage_Core_Exception $e) {
-                    throw new Plugin_Exception($e->getMessage(), 102);
+                } catch (Plugin_Exception $e) {
+                    throw new Plugin_Exception(sprintf('Order Transform Script error: %s', $e->getMessage()), 102, $e);
                 } catch (Exception $e) {
                     throw new Plugin_Exception('An unexpected error occurred while applying the Order Transform Script.', 102, $e);
                 }
@@ -294,7 +294,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             $result = $this->call('order.create', [$newOrderData['store'], $newOrderData['items'], $newOrderData['address'], $newOrderData['options']]);
             $this->log(sprintf('Created %s Order # %s for Magento Order # %s', $this->getAppTitle(), $result['unique_id'], $magentoOrder['increment_id']));
             if ($output) {
-                if ( ! Mage::getIsDeveloperMode()) {
+                if ( ! $this->isDeveloperMode()) {
                     $output = substr($output, 0, 512);
                 }
                 try {
