@@ -648,7 +648,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                 ];
                 $compareValue = empty($shippingLine[$field]) ? '' : $shippingLine[$field];
                 if ($operator == '=~') {
-                    if (@preg_match('/^'.$pattern.'$/i', NULL, $matches) === FALSE && $matches === NULL) {
+                    if (@preg_match('/^'.$pattern.'$/i', '', $matches) === FALSE && $matches === NULL) {
                         throw new Plugin_Exception('Invalid RegEx expression after "=~" operator', NULL, NULL, 'Get shipping method');
                     }
                     if (preg_match('/^'.$pattern.'$/i', $compareValue)) {
