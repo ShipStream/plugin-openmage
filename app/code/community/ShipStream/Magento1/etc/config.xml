@@ -17,16 +17,12 @@
                     </inventory>
                     <shipment>
                         <packed>1</packed>
+                        <shipped>1</shipped>
+                        <reverted>1</reverted>
+                        <labels_voided>1</labels_voided>
                     </shipment>
                 </events>
             </ShipStream_Magento1>
         </plugin>
     </default>
-    <phpunit>
-        <suite>
-            <modules>
-                <ShipStream_Magento1 />
-            </modules>
-        </suite>
-    </phpunit>
 </config>

@@ -342,7 +342,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     }
 
     /**
-     * Update Magento order from shipment:packed data
+     * Update Magento order from shipment:packed or shipment:shipped data
      *
      * @param Varien_Object $data
      * @return void
@@ -350,7 +350,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
      */
     public function shipmentPackedEvent(Varien_Object $data)
     {
-        $clientOrderId = $this->_getMagentoShipmentId($data->getSource());
+        $clientOrderId = $this->_getMagentoId($data->getSource());
         $clientOrder = $this->_magentoApi('order.info', $clientOrderId);
         if ($clientOrder['status'] != 'submitted' && $clientOrder['status'] != 'failed_to_submit') {
             throw new Plugin_Exception("Order $clientOrderId status is '{$clientOrder['status']}', expected 'submitted'.");
@@ -363,7 +363,37 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $payload = $data->getData();
         $payload['warehouse_name'] = $this->getWarehouseName($data->getWarehouseId());
         $magentoShipmentId = $this->_magentoApi('shipstream_order_shipment.createWithTracking', [$clientOrderId, $payload]);
+        $shipmentSource = 'magento:'.$magentoShipmentId;
+        $this->call('shipment.update', [$data->getData('unique_id'), ['source' => $shipmentSource]]);
         $this->log(sprintf('Created Magento shipment # %s for order # %s', $magentoShipmentId, $clientOrderId));
+    }
+
+    /**
+     * Update Magento order from shipment:reverted or shipment:labels_voided data
+     *
+     * @param Varien_Object $data
+     * @return void
+     * @throws Plugin_Exception
+     */
+    public function shipmentRevertedEvent(Varien_Object $data)
+    {
+        $magentoOrderId = $this->_getMagentoId($data->getSource());
+        $magentoShipmentId = $this->_getMagentoId($data->getExternalId());
+
+        // Submit webhook payload to custom method
+        $payload = $data->getData();
+        $payload['warehouse_name'] = $this->getWarehouseName($data->getWarehouseId());
+        $this->_magentoApi('shipstream_order_shipment.revert', [$magentoOrderId, $magentoShipmentId, $payload]);
+        $this->log(sprintf('Reverted Magento shipment # %s for order # %s', $magentoShipmentId, $magentoOrderId));
+
+        /*
+         * TODO on the remote end:
+        // Implement the shipstream_order_shipment.revert method:
+        // - Load the order using the order number and shipment using the shipment number
+        // - Delete the shipment entirely
+        // - Change order status back to Submitted
+        // - Add a note to the Magento order (customer not notified): Reverted shipment # {magento_shipment_increment_id}
+         */
     }
 
     /****************************
@@ -392,15 +422,68 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
 
     /**
      * Respond to shipment:packed event, completes the fulfillment
+     * If there are no tracking numbers, we wait until shipment is shipped to update WooCommerce order
      *
      * @param Varien_Object $data
      */
     public function respondShipmentPacked(Varien_Object $data)
     {
-        if ( ! $this->_getMagentoShipmentId($data->getSource())) {
+        if ( ! $this->_getMagentoId($data->getSource())) {
+            return;
+        }
+        if ( ! empty($data->getPackages()[0]['tracking_numbers'])) {
+            $this->addEvent('shipmentPackedEvent', $data->getData());
+        }
+    }
+
+    /**
+     * Respond to shipment:shipped event, completes the fulfillment
+     * If there are no tracking numbers, we wait until shipment is shipped to update WooCommerce order
+     *
+     * @param Varien_Object $data
+     */
+    public function respondShipmentShipped(Varien_Object $data)
+    {
+        if ( ! $this->_getMagentoId($data->getSource())) {
             return;
         }
         $this->addEvent('shipmentPackedEvent', $data->getData());
+    }
+
+    /**
+     * Respond to shipment:reverted event, rolls back the fulfillment
+     *
+     * @param Varien_Object $data
+     */
+    public function respondShipmentReverted(Varien_Object $data)
+    {
+        if ( ! $this->_getMagentoId($data->getSource())) {
+            return;
+        }
+        // external_id in webhook payload is set as 'source' using shipment.update
+        if ( ! $this->_getMagentoId($data->getExternalId())) {
+            return;
+        }
+        $this->addEvent('shipmentRevertedEvent', $data->toArray());
+    }
+
+    /**
+     * Respond to shipment:labels_voided event, rolls back the fulfillment if there are tracking numbers
+     *
+     * @param Varien_Object $data
+     */
+    public function respondShipmentLabelsVoided(Varien_Object $data)
+    {
+        if ( ! $this->_getMagentoId($data->getSource())) {
+            return;
+        }
+        // external_id in webhook payload is set as 'source' using shipment.update
+        if ( ! $this->_getMagentoId($data->getExternalId())) {
+            return;
+        }
+        if ( ! empty($data->getPackages()[0]['tracking_numbers'])) {
+            $this->addEvent('shipmentRevertedEvent', $data->toArray());
+        }
     }
 
     /************************
@@ -594,12 +677,12 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     }
 
     /**
-     * The Magento shipment increment id is stored in the source field
+     * The Magento order/shipment increment id is stored in the "source" field of the ShipStream order/shipment
      *
      * @param string $source
      * @return bool|string
      */
-    protected function _getMagentoShipmentId($source)
+    protected function _getMagentoId($source)
     {
         if (preg_match('/^magento:(\d+)$/', $source, $matches)) {
             return $matches[1];
