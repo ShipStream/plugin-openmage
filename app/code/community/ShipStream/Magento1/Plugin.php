@@ -105,8 +105,8 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
                 'Errors: '.($result['errors'] ? "\n".implode("\n", $result['errors']) : 'none'),
                 'Unchanged SKUs count: '.count($result['no_change']),
                 'Updated SKUs: '.($result['updated'] ? "\n".implode("\n", array_map(function($item) {
-                    return sprintf('%s: %d -> %d', $item['sku'], $item['old_qty'], $item['new_qty']);
-                }, $result['updated'])) : 'none'),
+                        return sprintf('%s: %d -> %d', $item['sku'], $item['old_qty'], $item['new_qty']);
+                    }, $result['updated'])) : 'none'),
             ];
         } catch (Plugin_Exception $e) {
             $this->logException($e);
@@ -350,12 +350,29 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
      */
     public function shipmentPackedEvent(Varien_Object $data)
     {
+        $shipmentIncrementId = $data->getData('unique_id');
         $clientOrderId = $this->_getMagentoId($data->getSource());
         $clientOrder = $this->_magentoApi('order.info', $clientOrderId);
-        if ($clientOrder['status'] != 'submitted' && $clientOrder['status'] != 'failed_to_submit') {
+        $magentoShipmentIncrementId = $this->_getMagentoShipmentIncrementId((string) $data->getExternalId());
+        if ($magentoShipmentIncrementId) {
+            $magentoShipment = $this->_magentoApi('shipstream_order_shipment.info', $magentoShipmentIncrementId);
+            if (is_array($magentoShipment) && empty($magentoShipment['tracks'])) {
+                $this->_magentoApi('shipstream_order_shipment.addTrackingNumbers', [$magentoShipmentIncrementId, $data->getData()]);
+                $this->log(sprintf('Updated tracking info for existing shipment %s.', $shipmentIncrementId));
+
+                $source = $this->_generateShipmentExternalId((string) $magentoShipment['increment_id'], TRUE);
+                $this->call('shipment.update', [$shipmentIncrementId, ['source' => $source]]);
+            } else {
+                $this->log(sprintf('Tracking info already added for shipment # %s', $magentoShipmentIncrementId), Zend_Log::DEBUG);
+            }
+
+            return;
+        }
+
+        if ($clientOrder['status'] !== 'submitted' && $clientOrder['status'] !== 'failed_to_submit') {
             throw new Plugin_Exception("Order $clientOrderId status is '{$clientOrder['status']}', expected 'submitted'.");
         }
-        if ($clientOrder['status'] == 'failed_to_submit') {
+        if ($clientOrder['status'] === 'failed_to_submit') {
             $this->log(sprintf('Order # %s was Failed to Submit, but we assume it is ok to complete it anyway.', $clientOrderId));
         }
 
@@ -363,9 +380,16 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $payload = $data->getData();
         $payload['warehouse_name'] = $this->getWarehouseName($data->getWarehouseId());
         $magentoShipmentId = $this->_magentoApi('shipstream_order_shipment.createWithTracking', [$clientOrderId, $payload]);
-        $shipmentSource = 'magento:'.$magentoShipmentId;
-        $this->call('shipment.update', [$data->getData('unique_id'), ['source' => $shipmentSource]]);
         $this->log(sprintf('Created Magento shipment # %s for order # %s', $magentoShipmentId, $clientOrderId));
+        $trackerAdded = FALSE;
+        foreach ($payload['packages'] as $package) {
+            if ( ! empty($package['tracking_numbers'])) {
+                $trackerAdded = TRUE;
+            }
+        }
+
+        $source = $this->_generateShipmentExternalId((string) $magentoShipmentId, $trackerAdded);
+        $this->call('shipment.update', [$shipmentIncrementId, ['source' => $source]]);
     }
 
     /**
@@ -378,7 +402,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     public function shipmentRevertedEvent(Varien_Object $data)
     {
         $magentoOrderId = $this->_getMagentoId($data->getSource());
-        $magentoShipmentId = $this->_getMagentoId($data->getExternalId());
+        $magentoShipmentId = $this->_getMagentoShipmentIncrementId($data->getExternalId());
 
         // Submit webhook payload to custom method
         $payload = $data->getData();
@@ -395,7 +419,6 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         // - Add a note to the Magento order (customer not notified): Reverted shipment # {magento_shipment_increment_id}
          */
     }
-
     /****************************
      * Internal Event Observers *
      ****************************/
@@ -422,7 +445,6 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
 
     /**
      * Respond to shipment:packed event, completes the fulfillment
-     * If there are no tracking numbers, we wait until shipment is shipped to update WooCommerce order
      *
      * @param Varien_Object $data
      */
@@ -431,14 +453,30 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         if ( ! $this->_getMagentoId($data->getSource())) {
             return;
         }
-        if ( ! empty($data->getPackages()[0]['tracking_numbers'])) {
-            $this->addEvent('shipmentPackedEvent', $data->getData());
+
+        $shipmentSource = $data->getData('external_id');
+        if (str_contains((string) $shipmentSource, ':t')) {
+            $this->log('Tracking info already updated for shipment source: ' . $shipmentSource, Zend_Log::DEBUG);
+            return;
+        }
+
+        $packages = $data->getPackages();
+        if (is_array($packages) && count($packages) > 0) {
+            foreach ($packages as $package) {
+                if ( ! empty($package['tracking_numbers'])) {
+                    $this->addEvent(
+                        'shipmentPackedEvent',
+                        array_merge($data->getData(), ['event_name' => 'shipment:shipped'])
+                    );
+                    return;
+                }
+            }
         }
     }
 
     /**
      * Respond to shipment:shipped event, completes the fulfillment
-     * If there are no tracking numbers, we wait until shipment is shipped to update WooCommerce order
+     * If there are no tracking numbers, we wait until shipment is shipped to update Magento order
      *
      * @param Varien_Object $data
      */
@@ -447,7 +485,14 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         if ( ! $this->_getMagentoId($data->getSource())) {
             return;
         }
-        $this->addEvent('shipmentPackedEvent', $data->getData());
+
+        $shipmentSource = $data->getData('external_id');
+        if (str_contains((string) $shipmentSource, ':t')) {
+            $this->log('Tracking info already updated for shipment source: ' . $shipmentSource, Zend_Log::DEBUG);
+            return;
+        }
+
+        $this->addEvent('shipmentPackedEvent', array_merge($data->getData(), ['event_name'=> 'shipment:shipped']));
     }
 
     /**
@@ -461,7 +506,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             return;
         }
         // external_id in webhook payload is set as 'source' using shipment.update
-        if ( ! $this->_getMagentoId($data->getExternalId())) {
+        if ( ! $this->_getMagentoShipmentIncrementId($data->getExternalId())) {
             return;
         }
         $this->addEvent('shipmentRevertedEvent', $data->toArray());
@@ -478,7 +523,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
             return;
         }
         // external_id in webhook payload is set as 'source' using shipment.update
-        if ( ! $this->_getMagentoId($data->getExternalId())) {
+        if ( ! $this->_getMagentoShipmentIncrementId($data->getExternalId())) {
             return;
         }
         if ( ! empty($data->getPackages()[0]['tracking_numbers'])) {
@@ -691,6 +736,34 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     }
 
     /**
+     * Get magento shipment increment id from external id field stored on WMS side (ShipStream)
+     *
+     * @param string $wmsExternalId
+     *
+     * @return false|string
+     */
+    protected function _getMagentoShipmentIncrementId(string $wmsExternalId)
+    {
+        if (preg_match('/^magento:(\d+)#(:t)?$/', $wmsExternalId, $matches)) {
+            return $matches[1];
+        }
+        return FALSE;
+    }
+
+    /**
+     * Generate external shipment id field stored on WMS side (ShipStream) in the external_id field of the shipment.
+     *
+     * @param string $mageShipmentIncrementId
+     * @param bool $addTrackingFlag
+     *
+     * @return string
+     */
+    protected function _generateShipmentExternalId(string $mageShipmentIncrementId, bool $addTrackingFlag = FALSE): string
+    {
+        return 'magento:' . $mageShipmentIncrementId . '#' . ($addTrackingFlag ? ':t' : '');
+    }
+
+    /**
      * Method is originally used for mapping Shopify shipping_lines to ShipStream shipping.
      * Reused as is for Magento1/OM.
      *
@@ -788,10 +861,10 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
     /**
      * Update Magento order status and add comment.
      *
-     * @param string $orderIncrementId 
-     * @param string $orderStatus 
-     * @param string $comment 
-     * @return void 
+     * @param string $orderIncrementId
+     * @param string $orderStatus
+     * @param string $comment
+     * @return void
      */
     protected function _addComment(string $orderIncrementId, string $orderStatus, string $comment = '')
     {
