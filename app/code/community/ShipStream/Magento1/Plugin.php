@@ -383,7 +383,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $this->log(sprintf('Created Magento shipment # %s for order # %s', $magentoShipmentId, $clientOrderId));
         $trackerAdded = FALSE;
         foreach ($payload['packages'] as $package) {
-            if ( ! empty($package['tracking_number'])) {
+            if ( ! empty($package['tracking_numbers'])) {
                 $trackerAdded = TRUE;
             }
         }
@@ -463,7 +463,7 @@ class ShipStream_Magento1_Plugin extends Plugin_Abstract
         $packages = $data->getPackages();
         if (is_array($packages) && count($packages) > 0) {
             foreach ($packages as $package) {
-                if ( ! empty($package['tracking_number'])) {
+                if ( ! empty($package['tracking_numbers'])) {
                     $this->addEvent(
                         'shipmentPackedEvent',
                         array_merge($data->getData(), ['event_name' => 'shipment:shipped'])
